@@ -16,3 +16,7 @@ HOW TO:
 3. Then you can just run each section in order.
 
 Functions are defined at the end of each script.
+
+DISCLAIMER:
+
+Some of the code within each file are redundant; I'll get them cleaned up soon.
