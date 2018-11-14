@@ -1,0 +1,391 @@
+%function [] = makeAveragePlots(nrnDat,allTimes,remove)
+% Friday November 2
+
+% "It's always hard to pantomime things that are 12-dimensional"
+
+%{
+TODO:
+Make sure that TV function is doing the right thing.
+SHould split the data into approx. equal amounts within each class.
+%}
+cd('~/Desktop/newMouseDat') % directory where the data is stored
+mapping=load('cellRegistered_20181031_213822.mat');
+mapStr = mapping.cell_registered_struct;
+cellMap = mapStr.cell_to_index_map;
+eps = 0.1;
+
+normX = @(X) (X-mean(X,2))./(std(X,0,2)+eps);
+% softNorm = @(X) (X./max(X,[],2)
+
+% edit to remove zeros
+
+[zRows, zCols] = find(cellMap==0);
+zRows = sort(unique(zRows));
+
+sameUnitsMap = cellMap;
+sameUnitsMap(zRows,:) = [];
+cellMap = sameUnitsMap;
+
+map1 = cellMap(:,1); % H13
+map2 = cellMap(:,2); % H17
+map3 = cellMap(:,3); % H18
+
+nrnIds1 = map1(map1>0);
+nrnIds2 = map2(map2>0);
+nrnIds3 = map3(map3>0);
+
+nrnIDs = {nrnIds1, nrnIds2, nrnIds3}; % group them into a cell
+% When inside a loop from 1 to 3:
+
+trialDirs = {'H13_M46_S37','H17_M38_S10','H18_M26_S50'}; % name of the folders
+
+nrnDat = struct;
+m = 10; % dimensionality of reduced data
+y = struct;
+numTrials = numel(trialDirs);
+for ii = 1:numTrials
+    %%%%%%%%%%%%%%%%%
+    % open the data %
+    cd(trialDirs{ii})
+    thisDir = pwd;
+    disp(thisDir)
+    nrn = load('neuron.mat'); nrn = nrn.neuron;
+    % extract and correctly index the neural data
+    nrnDat(ii).data = normX(nrn.C(nrnIDs{ii},:));
+    
+    nrnDat(ii).dir = trialDirs{ii};
+    [numUnits, numBins] = size(nrnDat(ii).data);
+    % perform PCA for dimRedux
+    [escCoeff,score] = pca(nrnDat(ii).data');
+    
+    nrnDat(ii).features = score(:,1:m)';
+    
+    %%%%%%%%%%%%%%%%%%%%%%%
+    % now make the labels %
+    % load the behavioral transition times
+    % get the indices for the start of each behavior
+    
+    labels = cell(size(nrnDat(ii).data,2),1);
+    labels(:) = {'0'};
+    BxTimes = load('Behavior_MS.mat');
+    
+    
+    times.app = [];
+    times.esc = [];
+    times.frz = [];
+    times.str = [];
+    
+    appTimes = BxTimes.approachFrameMS; % approach
+    for jj = 1:size(appTimes,1)
+        if appTimes(jj,2) <= numBins
+            times.app = [times.app, appTimes(jj,1):appTimes(jj,2)];
+        end
+    end; labels(times.app) = {'approach'};
+    
+    escTimes = BxTimes.escapeFrameMS; % escape
+    for jj = 1:size(escTimes,1)
+        if escTimes(jj,2) <= numBins
+            times.esc = [times.esc, escTimes(jj,1):escTimes(jj,2)];
+        end
+    end; labels(times.esc) = {'escape'};
+    
+    frzTimes = BxTimes.freezeFrameMS; % freeze
+    for jj = 1:size(frzTimes,1)
+        if frzTimes(jj,2) <= numBins
+            times.frz = [times.frz, frzTimes(jj,1):frzTimes(jj,2)];
+        end
+    end; labels(times.frz) = {'freeze'};
+    
+    strTimes = BxTimes.stretchFrameMS; % stretch
+    for jj = 1:size(strTimes,1)
+        if strTimes(jj,2) <= numBins
+            times.str = [times.str, strTimes(jj,1):strTimes(jj,2)];
+        end
+    end; labels(times.str) = {'stretch'};
+    y(ii).labels = labels;
+    cd('../')
+    
+    % save the in- and out-times from each Bx epoch
+    allTimes(ii).app = appTimes;
+    allTimes(ii).esc = escTimes;
+    allTimes(ii).frz = frzTimes;
+    allTimes(ii).str = strTimes;
+end
+
+
+
+%% Troubleshoot the neural identities
+MEANS = [];
+for ii = 1:3
+    YY = y(ii).labels;
+    XX = nrnDat(ii).data;
+    classInds(ii).app = find(contains(YY,'approach'));
+    classInds(ii).esc = find(contains(YY,'escape'));
+    classInds(ii).frz = find(contains(YY,'freeze'));
+    classInds(ii).str = find(contains(YY,'stretch'));
+    
+    bxData(ii).app  = normX(XX(:,classInds(ii).app));
+    bxData(ii).esc  = normX(XX(:,classInds(ii).esc));
+    bxData(ii).frz  = normX(XX(:,classInds(ii).frz));
+    bxData(ii).str  = normX(XX(:,classInds(ii).str));
+    
+    figure;
+    
+    ax1 = subplot(221); sc1 = imagesc(bxData(ii).app);
+    cb1 = colorbar; cmap1 = caxis; title('Approach')
+    ax2 = subplot(222); sc2 = imagesc(bxData(ii).esc);
+    cb2 = colorbar; cmap2 = caxis; title('Escape')
+    ax3 = subplot(223); sc3 = imagesc(bxData(ii).frz);
+    cb3 = colorbar; cmap3 = caxis; title('Freeze')
+    ax4 = subplot(224); sc4 = imagesc(bxData(ii).str);
+    cb4 = colorbar; cmap4 = caxis; title('Stretch')
+    
+    %     figure;
+    %
+    % allMeans = [mean(bxData(ii).app,2), ...
+    %         mean(bxData(ii).esc,2),...
+    %         mean(bxData(ii).frz,2),...
+    %         mean(bxData(ii).str,2)];
+    %     plot(mean(bxData(ii).app,2),'LineWidth',2)
+    %     hold on
+    %     plot(mean(bxData(ii).esc,2),'LineWidth',2)
+    %     plot(mean(bxData(ii).frz,2),'LineWidth',2)
+    %     plot(mean(bxData(ii).str,2),'LineWidth',2)
+    %     plot(mean(allMeans,2),'k--','LineWidth',2)
+    %     grid on
+    %
+    %     legend('app','esc','frz','str','AVG')
+    
+    %    MEANS = [MEANS, mean(allMeans,2)];
+end
+% close all
+% Find units to remove
+
+for ii = 1:3
+    eachDay(ii).app = mean(normX(bxData(ii).app),2);
+    eachDay(ii).esc = mean(normX(bxData(ii).esc),2);
+    eachDay(ii).frz = mean(normX(bxData(ii).frz),2);
+    eachDay(ii).str = mean(normX(bxData(ii).str),2);
+end
+
+% get correlations:
+% For a given cell: Get the correlations
+%
+% For each cell:
+% Make a vector (4 x 1) for each day.
+% Then, take correlations between each vector
+% Minimum will be the lowest R value.
+% Then exclude units with R < thresh.
+numUnits = size(eachDay(ii).app,1);
+corrMat = zeros(numUnits,4,3);
+corrs = zeros(3,numUnits);
+
+for ii = 1:3
+    x = eachDay(ii);
+    corrMat(:,:,ii) = [x.app,x.esc,x.frz,x.str];
+end
+
+for ii = 1:numUnits
+    C = corr(squeeze(corrMat(ii,:,:)));
+    corrs(:,ii) = [C(1,2),C(1,3),C(2,3)];
+end
+minCorr = min(abs(corrs));
+
+unitsToRemove = find(minCorr<0.9*mean(minCorr));
+remove = unitsToRemove;
+
+
+
+
+allAverages = struct;
+for day = 1:3
+    thisDat =nrnDat(day).data;
+    thisDat(:,remove) = [];
+    theseTimes = allTimes(day);
+    
+    appMeans = [];
+    appTrials = [];
+    for jj = 1:size(theseTimes.app,1)
+        % get the in / out times for each trial of this behavior
+        appTimes = theseTimes.app(jj,:);
+        appTimes(1) = appTimes(1) - 14;
+        appTimes(2) = appTimes(1) + 2*14;
+        try
+            if appTimes(1) > 0
+                appTrial = nrnDat(day).data(:,appTimes(1):appTimes(2));
+                thisAppMean = mean(appTrial);
+            else
+                continue;
+            end
+        catch
+            keyboard
+        end
+        appMeans = [appMeans;thisAppMean];
+        appTrials(:,:,jj) = appTrial;
+    end
+    
+    
+    keyboard
+    escMeans = [];
+    escTrials = [];
+    for jj = 1:size(theseTimes.esc,1)
+        escTimes = theseTimes.esc(jj,:);
+        escTimes(1) = escTimes(1) - 14;
+        escTimes(2) = escTimes(1) + 2*14;
+        if escTimes(1) > 0
+            escTrial = nrnDat(day).data(:,escTimes(1):escTimes(2));
+            thisEscMean = mean(escTrial);
+        else, continue
+        end
+        escMeans = [escMeans;thisEscMean];
+        escTrials(:,:,jj) = escTrial;
+    end
+    
+    frzMeans = [];
+    frzTrials = [];
+    for jj = 1:size(theseTimes.frz,1)
+        frzTimes = theseTimes.frz(jj,:);
+        frzTimes(1) = frzTimes(1) - 14; % assuming 7Hz frame-rate: 2 seconds
+        frzTimes(2) = frzTimes(1) + 2*14;
+        if frzTimes(1) > 0
+            frzTrial = nrnDat(day).data(:,frzTimes(1):frzTimes(2));
+            thisFrzMean = mean(frzTrial);
+        else
+            continue
+        end
+        frzMeans = [frzMeans;thisFrzMean];
+        frzTrials(:,:,jj) = frzTrial;
+    end
+    
+    strMeans = [];
+    strTrials = [];
+    for jj = 1:size(theseTimes.str,1)
+        strTimes = theseTimes.str(jj,:);
+        strTimes(1) = strTimes(1) - 14;
+        strTimes(2) = strTimes(1) + 2*14;
+        if strTimes(1) > 0
+            strTrial = nrnDat(day).data(:,strTimes(1):strTimes(2));
+            thisStrMean = mean(strTrial);
+        else
+            continue
+        end
+        strMeans = [strMeans;thisStrMean];
+        strTrials(:,:,jj) = strTrial;
+    end
+    allAverages(day).app = mean(appMeans);
+    allAverages(day).esc = mean(escMeans);
+    allAverages(day).frz = mean(frzMeans);
+    allAverages(day).str = mean(strMeans);
+    allTrials(day).app = appTrials;
+    allTrials(day).esc = escTrials;
+    allTrials(day).frz = frzTrials;
+    allTrials(day).str = strTrials;
+    
+    allAverages(day).appMeans = appMeans;
+    allAverages(day).escMeans = escMeans;
+    allAverages(day).frzMeans = frzMeans;
+    allAverages(day).strMeans = strMeans;
+end
+
+appAv = [];
+escAv = [];
+frzAv = [];
+strAv = [];
+for day = 1:3
+    figure;
+
+    for sp = 1:4
+        subplot(2,2,sp)
+        if sp == 1
+            plot(allAverages(day).app)
+            title('Approach')
+        elseif sp == 2
+            plot(allAverages(day).esc)
+            title('Escape')
+        elseif sp == 3
+            plot(allAverages(day).frz)
+            title('Freeze')
+        else
+            plot(allAverages(day).str)
+            title('Stretch')
+        end
+
+    end
+    suptitle(['Day ',num2str(day)])
+    appAv = [appAv;allAverages(day).app];
+    escAv = [escAv;allAverages(day).esc];
+    frzAv = [frzAv;allAverages(day).frz];
+    strAv = [strAv;allAverages(day).str];
+    
+end
+% plot the averages across all days
+figure; 
+    for sp = 1:4
+        subplot(2,2,sp)
+        if sp == 1
+            plot(mean(appAv))
+            title('Approach')
+        elseif sp == 2
+            plot(mean(escAv))
+            title('Escape')
+        elseif sp == 3
+            plot(mean(frzAv))
+            title('Freeze')
+        else
+            plot(mean(strAv))
+            title('Stretch')
+        end
+
+    end
+    suptitle('Averages across all days')
+    
+    %% get PCs of PSTHs
+    
+    pcs = struct;
+    pcs.app = [];
+    pcs.esc = [];
+    pcs.frz = [];
+    pcs.str = [];
+    
+    % For rasters of size 30 neurons x 29 time bins;
+        % We want the PCs of the Dynamics . . . 
+        % So this should reduce from 30 x 29 to something like
+        %           2 x 29 
+        %     for PC1 and PC2. 
+        
+        
+    
+     
+    
+    for day = 1:3
+        [appCoeff, appScores] = pca(allAverages(day).appMeans);
+        pcs(day).app = appCoeff;
+
+        [escCoeff, scores] = pca(allAverages(day).escMeans);
+        pcs(day).esc = escCoeff;
+
+        [frzCoeff, scores] = pca(allAverages(day).frzMeans);
+        pcs(day).frz = frzCoeff;
+
+        [strCoeff, scores] = pca(allAverages(day).strMeans);
+        pcs(day).str = strCoeff;
+        
+        subplot(2,2,day)
+        xx = -14:14;%:29;
+        lw = 1.4;
+        plot(xx,appCoeff(:,1),...
+             xx,escCoeff(:,1),...
+             xx,frzCoeff(:,1), ...
+             xx,strCoeff(:,1), 'LineWidth',lw)
+%         hold on
+%         plot()
+%         plot()
+%         plot(strCoeff(:,1))
+        legend('App','Esc','Frz','Str')
+        grid on
+        xlabel('Bin')
+        ylabel('PC 1')
+        ylim([0 0.3])
+        title(['Day ', num2str(day)])
+
+    end
