@@ -173,7 +173,7 @@ allAverages = struct;
 % TRIMMING PARAMETERS
 timeBeforeBxOnset = 2;
 Sr = 1; % sample rate == 10
-numFramesPerBx = 5;
+numSecsPerBx = 5;
 %%%%%%%%%%%%%%%%%%%%%%
 for day = 1:numDays
     thisDat = nrnDat(day).data;
